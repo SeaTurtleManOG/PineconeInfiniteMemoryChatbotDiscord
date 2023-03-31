@@ -15,6 +15,18 @@ RAVEN is an AI-powered Discord bot built using Python, GPT-3, and the Discord AP
 - Engaging and dynamic conversation capabilities
 - Cache system for faster response times
 
+The bot uses Azure Blob Storage for the following reasons:
+
+1. File size limitations: Discord has a file size limit for uploading files. For example, if the bot converts a YouTube video to an audio format like MP3 or WAV, and the output file size exceeds the allowed limit, it cannot be directly sent on Discord. Azure Blob Storage provides a cloud-based solution to store and share larger files.
+
+2. Persistent storage: By using Azure Blob Storage, the bot can store and manage files in a reliable and scalable cloud storage service. This ensures that the converted files are safely stored and can be accessed later if needed.
+
+3. Access control: Azure Blob Storage provides secure access to the stored files using Shared Access Signatures (SAS). The bot can generate SAS URLs with specific permissions and expiry times, allowing users to access the converted files without compromising the security of the storage account.
+
+4. Scalability and performance: Azure Blob Storage is designed to handle large amounts of unstructured data, making it a suitable choice for storing and sharing various file types, such as audio and video files. It also offers high availability and performance, ensuring that users can download the converted files quickly and efficiently.
+
+
+
 ## Installation
 
 To get started with RAVEN, follow these steps:
