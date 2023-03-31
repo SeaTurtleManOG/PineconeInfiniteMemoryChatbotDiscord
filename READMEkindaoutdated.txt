@@ -1,9 +1,0 @@
-This was AI generated.
-
-This Python code creates a Discord bot with various functionalities, including handling Discord commands and events, interacting with OpenAI's GPT-3 for text embeddings, completions, and summarization, storing and retrieving conversation histories using Pinecone, summarizing conversations to fit within token limits, setting custom system messages per user, handling large messages in Discord, converting YouTube videos to mp3, wav, or mp4, creating and executing custom commands per user, processing text file input from users, and caching user input and responses.
-
-To use this code, you'll need Python 3.6 or higher with the required packages installed, such as discord.py, openai, nltk, and pinecone. Set up a Discord bot token in the "config.json" file and the OpenAI and Pinecone API keys as environment variables. Optionally, set a default system message for the bot in the `config.json` file.
-
-Once configured, run the bot by executing the "main.py" file. The bot will connect to your Discord server, and you can interact with it using various commands. The other files contain helper functions and additional functionalities, such as interacting with GPT-3, handling YouTube video conversion and uploading to Azure Blob Storage, providing utility functions, and supporting the bot's commands.
-
-The bot's primary command is "!raven", which processes user input and generates responses using GPT-3. It also supports other commands like "!set_system_message", "!set_convo_length", "!improve", and "!convert". The "custom_commands.py" file allows users to create and execute their custom commands using the "!create_custom" and "!custom" commands, respectively.
