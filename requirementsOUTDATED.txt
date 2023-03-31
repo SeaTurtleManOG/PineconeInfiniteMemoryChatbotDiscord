@@ -1,7 +1,0 @@
-discord.py
-openai
-ffmpeg-python
-nltk
-youtube_dl
-pinecone-sdk
-azure-storage-blob

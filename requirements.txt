@@ -1,0 +1,12 @@
+discord.py
+python-dotenv
+nltk
+openai
+pinecone-client
+pytube
+youtube-dl
+ffmpeg-python
+azure-storage-blob
+selenium
+beautifulsoup4
+requests
