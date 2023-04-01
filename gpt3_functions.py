@@ -79,7 +79,19 @@ def load_conversation(faiss_results, pinecone_results, user_id, max_tokens=2000,
 
     return message_block
 
-# SUmmarize function
+def update_faiss_index(unique_id, vector_1536):
+    global faiss_index, index_to_filename_mapping
+
+    # Convert the list to a NumPy array and reshape
+    vector_1536_np = np.array(vector_1536).reshape(1, -1)
+
+    # Add the vector to the Faiss index
+    faiss_index.add(vector_1536_np)
+
+    # Update the index_to_filename_mapping dictionary
+    index_to_filename_mapping[faiss_index.ntotal - 1] = unique_id
+
+# Summarize function
 async def summarize_website(url):
     if "twitter.com" in url:
         # Use Selenium for Twitter links
