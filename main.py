@@ -43,10 +43,17 @@ async def random_messages():
         prompt = "Generate a random message and decide the time delay (in seconds) between messages:"
         
         # Generate a response and time delay using GPT-3
-        response = (await process_user_input(prompt, user_id, config.get("CONVO_LENGTH", 10))).strip()
+        response = await process_user_input(prompt, user_id, config.get("CONVO_LENGTH", 10)).strip()
 
         # Extract message and time delay
         response_lines = response.split("\n")
+
+        # Check if response_lines has at least two elements
+        if len(response_lines) < 2:
+            print("Error: GPT-3 response does not contain enough lines for message and time delay.")
+            await asyncio.sleep(10)  # Wait for 10 seconds before trying again
+            continue
+
         message, time_delay = response_lines[0].strip(), float(response_lines[1].strip())
 
         # Send the message to the target channel
