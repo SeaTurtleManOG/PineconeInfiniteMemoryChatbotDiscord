@@ -9,8 +9,12 @@ import custom_commands
 from time import time
 from config import config, save_custom_system_messages
 from functools import lru_cache
+from datetime import datetime  # Added import statement for 'datetime'
+
+# Cache
 cache = {}
-#new caching system
+
+# New caching system
 @lru_cache(maxsize=256)
 async def process_user_input_cached(user_input, user_id, convo_length=10):
     return await process_user_input(user_input, user_id, convo_length)
@@ -80,7 +84,7 @@ async def convert(ctx, youtube_url: str, output_format: str):
     os.remove(video_file)  # Remove the temporary video file
     os.remove(temp_file)   # Remove the temporary audio file
 
-# custom commands code
+# Custom commands code
 @commands.command(name="create_custom")
 async def create_custom(ctx, command_name: str, *, command_action: str):
     user_id = str(ctx.author.id)
@@ -128,13 +132,15 @@ async def raven(ctx, *args):
     elif user_input.lower().startswith("can you summarize this website for me"):
         url = user_input.split()[-1]
         response = await summarize_website(url)
-    else:
-        if user_input in cache:
-            response = cache[user_input]
+        cache[user_id] = {"url": url, "summary": response}  # Add this line to store the URL and summary in the cache
+    elif "further explain" in user_input.lower() or "the article" in user_input.lower():
+        if user_id in cache and "url" in cache[user_id]:  # Check if there is a cached URL and summary for the user
+            response = f"I previously summarized an article from {cache[user_id]['url']}. Here is the summary again: {cache[user_id]['summary']} If you need more information, please visit the website or let me know which specific aspect you'd like me to explain further."
         else:
-            convo_length = config.get("CONVO_LENGTH", 10)
-            response = await process_user_input_cached(user_input, user_id, config.get("CONVO_LENGTH", 10))
-            cache[user_input] = response
+            response = "I'm sorry, but I don't have any recent article summaries to provide more information on. Please provide a URL or more context."
+    else:
+        convo_length = config.get("CONVO_LENGTH", 10)
+        response = await process_user_input_cached(user_input, user_id, convo_length=10)
 
     response = f"RAVEN: {response}"
     await send_large_message(ctx.channel, response)
