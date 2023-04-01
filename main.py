@@ -43,7 +43,7 @@ async def random_messages():
         prompt = "Generate a random message and decide the time delay (in seconds) between messages:"
         
         # Generate a response and time delay using GPT-3
-        response = await process_user_input(prompt, user_id, config.get("CONVO_LENGTH", 10)).strip()
+        response = (await process_user_input(prompt, user_id, config.get("CONVO_LENGTH", 10))).strip()
 
         # Extract message and time delay
         response_lines = response.split("\n")
