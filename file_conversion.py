@@ -24,7 +24,7 @@ def download_youtube_video(youtube_url, output_format):
         if output_format in ["mp3", "wav"]:
             converted_file = convert_video_to_audio(temp_file, output_format)
             os.remove(temp_file)
-            return converted_file
+            return converted_file  # This line was changed to return the path of the converted audio file
         else:
             return temp_file
 
