@@ -34,9 +34,8 @@ def read_api_key(filename):
     with open(filename, 'r') as file:
         return file.read().strip()
 
-# Initialize Pinecone and openai
-openai.api_key_path = ".env"
-openai_api_key = os.getenv("OPENAI_API_KEY")
+# Initialize openai
+openai.api_key_path = "key_openai.txt"
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone.init(api_key=pinecone_api_key, environment="us-west4-gcp")
 vdb = pinecone.Index(index_name="yourindexname")
