@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import os
 import json
-from file_conversion import convert_video_to_audio, download_youtube_video, upload_to_azure
+from file_conversion import download_youtube_video, upload_to_azure
 from pinecone_utils import load_vectors_from_pinecone_to_faiss, load_conversation
 from faiss_utils import save_faiss_index, load_faiss_index, get_representative_vectors
 from discord_commands import *
@@ -25,6 +25,8 @@ bot.add_command(convert)
 bot.add_command(create_custom)
 bot.add_command(custom)
 bot.add_command(raven)
+bot.add_command(scrape)
+
 
 if os.path.exists("faiss_index.idx"):
     faiss_index = load_faiss_index("faiss_index.idx")
