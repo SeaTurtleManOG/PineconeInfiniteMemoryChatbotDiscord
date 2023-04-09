@@ -4,20 +4,20 @@ import os
 import asyncio
 from gpt3_functions import process_user_input, summarize_website
 from file_conversion import download_youtube_video, upload_to_azure
-from file_conversion import convert_video_to_audio
 import custom_commands
 from time import time
 from config import config, save_custom_system_messages
 from functools import lru_cache
 from datetime import datetime  # Added import statement for 'datetime'
+from browser_automation import get_js_website_content, get_tweet_text
+
 
 # Cache
 cache = {}
 
 # New caching system
-@lru_cache(maxsize=256)
-async def process_user_input_cached(user_input, user_id, convo_length=10):
-    return await process_user_input(user_input, user_id, convo_length)
+async def process_user_input_cached(user_input, user_id, convo_length=10, cache=None):
+    return await process_user_input(user_input, user_id, convo_length, cache)
 
 # Function to send large messages by splitting them into smaller parts
 async def send_large_message(channel, message, max_chars=2000):
@@ -25,6 +25,13 @@ async def send_large_message(channel, message, max_chars=2000):
     for part in message_parts:
         await channel.send(part)
         await asyncio.sleep(1)  # Add asyncio.sleep(1) to avoid hitting rate limits
+
+@commands.command(name="scrape")
+async def scrape(ctx, url: str):
+    content = await get_js_website_content(url)
+    await ctx.send(f"RAVEN: Website content:\n{content}")
+
+
 
 # Command to set the bot's personality or directive
 @commands.command(name="set_system_message")
@@ -58,13 +65,11 @@ async def convert(ctx, youtube_url: str, output_format: str):
         return
 
     # Download and convert the YouTube video
-    video_file = download_youtube_video(youtube_url, output_format)
+    temp_file = download_youtube_video(youtube_url, output_format)
 
-    if video_file is None:  # Add this check to handle the error case
+    if temp_file is None:  # Add this check to handle the error case
         await ctx.send("RAVEN: Error downloading and converting YouTube video.")
         return
-
-    temp_file = convert_video_to_audio(video_file, output_format)
 
     # Check file size and handle uploading to Azure if needed
     file_size = os.path.getsize(temp_file)
@@ -81,7 +86,7 @@ async def convert(ctx, youtube_url: str, output_format: str):
         with open(temp_file, "rb") as output_file:
             await ctx.send(f"RAVEN: Here's the converted file.", file=discord.File(output_file, filename=os.path.basename(temp_file)))
 
-    os.remove(video_file)  # Remove the temporary video file
+
     os.remove(temp_file)   # Remove the temporary audio file
 
 # Custom commands code
@@ -127,20 +132,12 @@ async def raven(ctx, *args):
         await ctx.send(f"RAVEN: {response}")
         return
 
-    if user_input.lower() == "what is the current date and time?":
-        response = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    elif user_input.lower().startswith("can you summarize this website for me"):
-        url = user_input.split()[-1]
-        response = await summarize_website(url)
-        cache[user_id] = {"url": url, "summary": response}  # Add this line to store the URL and summary in the cache
-    elif "further explain" in user_input.lower() or "the article" in user_input.lower():
-        if user_id in cache and "url" in cache[user_id]:  # Check if there is a cached URL and summary for the user
-            response = f"I previously summarized an article from {cache[user_id]['url']}. Here is the summary again: {cache[user_id]['summary']} If you need more information, please visit the website or let me know which specific aspect you'd like me to explain further."
-        else:
-            response = "I'm sorry, but I don't have any recent article summaries to provide more information on. Please provide a URL or more context."
+    cache_key = (user_input, user_id, config.get("CONVO_LENGTH", 10))
+    if cache_key in cache:
+        response = cache[cache_key]
     else:
-        convo_length = config.get("CONVO_LENGTH", 10)
-        response = await process_user_input_cached(user_input, user_id, convo_length=10)
+        response = await process_user_input(user_input, user_id, config.get("CONVO_LENGTH", 10), cache)
+        cache[cache_key] = response
 
     response = f"RAVEN: {response}"
     await send_large_message(ctx.channel, response)
