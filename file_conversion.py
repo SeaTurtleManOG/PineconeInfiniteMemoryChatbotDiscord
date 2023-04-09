@@ -1,5 +1,4 @@
 import os
-import youtube_dl
 import ffmpeg
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, generate_account_sas, AccountSasPermissions, generate_container_sas, ContainerSasPermissions
 from datetime import datetime, timedelta
