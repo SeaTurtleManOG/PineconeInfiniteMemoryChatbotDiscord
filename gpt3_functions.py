@@ -7,6 +7,7 @@ from time import time
 import asyncio
 import pinecone
 from config import config
+import numpy as np
 import uuid
 from uuid import uuid4
 import requests
@@ -14,8 +15,12 @@ from bs4 import BeautifulSoup
 from nltk.tokenize import word_tokenize
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 import nltk
 import faiss
+from browser_automation import get_js_website_content, get_tweet_text
 from pinecone_utils import load_vectors_from_pinecone_to_faiss, load_conversation
 
 # Faiss index initialization
@@ -63,7 +68,8 @@ def load_conversation(faiss_results, pinecone_results, user_id, max_tokens=2000,
         file_path = f'nexus/{m["id"]}.json'
         if os.path.exists(file_path):  # Add this check to see if the file exists
             info = load_json(file_path)
-            info["vector"] = fetched_vectors[m["id"]]  # Replace the loaded vector with the fetched vector
+            if m["id"] in fetched_vectors:  # Add this check to see if the vector ID exists in fetched_vectors
+                info["vector"] = fetched_vectors[m["id"]]  # Replace the loaded vector with the fetched vector
             if info.get('user_id') == user_id or info.get('speaker') == 'RAVEN':
                 result.append(info)
     ordered = sorted(result, key=lambda d: d['time'], reverse=False)
@@ -79,44 +85,18 @@ def load_conversation(faiss_results, pinecone_results, user_id, max_tokens=2000,
 
     return message_block
 
-def update_faiss_index(unique_id, vector_1536):
-    global faiss_index, index_to_filename_mapping
-
-    # Convert the list to a NumPy array and reshape
-    vector_1536_np = np.array(vector_1536).reshape(1, -1)
-
-    # Add the vector to the Faiss index
-    faiss_index.add(vector_1536_np)
-
-    # Update the index_to_filename_mapping dictionary
-    index_to_filename_mapping[faiss_index.ntotal - 1] = unique_id
-
 # Summarize function
 async def summarize_website(url):
     if "twitter.com" in url:
-        # Use Selenium for Twitter links
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
-        browser = webdriver.Chrome(options=chrome_options)
-
-        try:
-            browser.get(url)
-            tweet_element = browser.find_element_by_xpath('//div[contains(@data-testid, "tweet")]//div[contains(@class, "css-901oao") and contains(@class, "r-1qd0xha") and contains(@class, "r-a023e6")]')
-            tweet_text = tweet_element.text
-            summary = await gpt3_completion(f"Please summarize the following content from the tweet at {url}:\n\n{tweet_text}")
-            summary = summary.strip()
-
-        except Exception as e:
-            summary = f"Error summarizing the website: {e}"
-
-        finally:
-            browser.quit()
+        # Use get_tweet_text for Twitter links
+        tweet_text = await get_tweet_text(url)
+        summary = await gpt3_completion(f"Please summarize the following content from the tweet at {url}:\n\n{tweet_text}")
+        summary = summary.strip()
 
     else:
-        # Use BeautifulSoup for non-Twitter links
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, "html.parser")
+        # Use get_js_website_content for non-Twitter links
+        content = await get_js_website_content(url)
+        soup = BeautifulSoup(content, "html.parser")
         paragraphs = soup.find_all("p")
         text = "\n".join(p.get_text() for p in paragraphs)
         summary = await gpt3_completion(f"Please summarize the following content from the website {url}:\n\n{text}")
@@ -125,7 +105,7 @@ async def summarize_website(url):
     return summary
 
 # Function to generate an embedding vector for a given text using GPT-3
-def gpt3_embedding(content, engine='text-embedding-ada-002'):
+def gpt3_embedding_1536(content, engine='text-embedding-ada-002'):
     if not content:
         # Handle the empty string case here, for example, return a default vector
         return default_vector
@@ -140,9 +120,21 @@ def gpt3_embedding(content, engine='text-embedding-ada-002'):
 
     return vector
 
+def update_faiss_index(unique_id, vector_1536, gpt3_embedding_fn):
+    global faiss_index, index_to_filename_mapping
 
+    # Convert the list to a NumPy array and reshape
+    vector_1536_np = np.array(vector_1536).reshape(1, -1)
+
+    # Add the vector to the Faiss index
+    faiss_index.add(vector_1536_np)
+
+    # Update the index_to_filename_mapping dictionary
+    index_to_filename_mapping[faiss_index.ntotal - 1] = unique_id
+    
+    
 # Function to process user input and generate a response
-async def process_user_input(user_input, user_id, convo_length=10):
+async def process_user_input(user_input, user_id, convo_length=10, cache=None):
     response = None
     max_tokens = 4096  # Define the maximum tokens allowed for GPT-3
 
@@ -169,7 +161,7 @@ async def process_user_input(user_input, user_id, convo_length=10):
     payload = list()
     message = user_input
     timestamp = time()
-    vector = gpt3_embedding(message)
+    vector = gpt3_embedding_1536(message)
     unique_id = str(uuid4())
     metadata = {'speaker': 'USER', 'time': timestamp, 'message': message, 'uuid': unique_id}
     save_json(f'nexus/{unique_id}.json', metadata)
@@ -179,7 +171,7 @@ async def process_user_input(user_input, user_id, convo_length=10):
     pinecone_results = vdb.query(vector=vector, top_k=convo_length)
     
     # Store the bot's response and user messages in Pinecone
-    vector_response = gpt3_embedding(response) if response is not None else vector
+    vector_response = gpt3_embedding_1536(response) if response is not None else vector
     unique_id_response = str(uuid.uuid4())
     metadata_response = {'speaker': 'RAVEN', 'time': time(), 'message': response, 'uuid': unique_id_response}
 
@@ -190,10 +182,9 @@ async def process_user_input(user_input, user_id, convo_length=10):
     vdb.upsert([(unique_id_response, vector_response), (unique_id, vector)])
 
     # Update Faiss index
-    update_faiss_index(unique_id, vector)
+    update_faiss_index(unique_id, vector, gpt3_embedding_1536)
     
-    # Generate a response and time delay using GPT-3
-    response = (await gpt3_completion(prompt, user_id, config.get("CONVO_LENGTH", 10))).strip()
+
     
     # Check if the conversation is in the cache
     if user_id in cache:
@@ -206,9 +197,13 @@ async def process_user_input(user_input, user_id, convo_length=10):
     if len(tokens) > max_tokens:
         conversation = ' '.join(tokens[:max_tokens])
 
-    system_message = config["CUSTOM_SYSTEM_MESSAGES"].get(str(user_id), config.get("SYSTEM_MESSAGE"))
+    system_message = config["CUSTOM_SYSTEM_MESSAGES"].get(str(user_id), config.get("SYSTEM_MESSAGE", ""))
+    if not isinstance(system_message, str):
+       system_message = ""
     prompt = f"System message: {system_message}\n\nPREVIOUS CONVERSATION:\n\n{conversation}\n\nUSER: {user_input}\n"
-
+    # Generate a response using GPT-3
+    response = (await gpt3_completion(prompt, user_id=user_id)).strip()
+    
     # Generate response, vectorize, save, etc
     try:
         output = await gpt3_completion(prompt)
@@ -216,7 +211,7 @@ async def process_user_input(user_input, user_id, convo_length=10):
         output = str(error)
         # Save error information to Pinecone
         error_metadata = {'speaker': 'RAVEN', 'time': time(), 'error': output, 'uuid': str(uuid4())}
-        error_vector = gpt3_embedding(output)
+        error_vector = gpt3_embedding_1536(output)
         vdb.upsert([(error_metadata['uuid'], error_vector)])
         save_json('nexus/%s.json' % error_metadata['uuid'], error_metadata)
 
@@ -225,9 +220,9 @@ async def process_user_input(user_input, user_id, convo_length=10):
     vdb.upsert(payload)
     
     # Save the vector to both Pinecone (1536-dimensional) and Faiss (768-dimensional)
-    vector_768 = gpt3_embedding_768(message)
-    vector_768_np = np.array(vector_768).reshape(1, -1)  # Convert the list to a NumPy array and reshape
-    faiss_index.add(vector_768_np)
+    vector_1536 = gpt3_embedding_1536(message)
+    vector_1536_np = np.array(vector_1536).reshape(1, -1)  # Convert the list to a NumPy array and reshape
+    faiss_index.add(vector_1536_np)
     vdb.upsert([(unique_id, vector)])
     
     
@@ -239,18 +234,23 @@ async def process_user_input(user_input, user_id, convo_length=10):
         del cache[user_id]
 
 # Function to generate a completion using GPT-3 with the given prompt and other parameters
-async def gpt3_completion(prompt, user_id=None, model='gpt-3.5-turbo', temp=0.7, top_p=1.0, tokens=400, freq_pen=0.0, pres_pen=0.0, stop=['USER:', 'RAVEN:']):
+async def gpt3_completion(prompt, user_id=None, model='gpt-4', temp=0.7, top_p=1.0, tokens=400, freq_pen=0.0, pres_pen=0.0, stop=['USER:', 'RAVEN:']):
     max_retry = 5
     retry = 0
     prompt = prompt.encode(encoding='ASCII', errors='ignore').decode()
     while True:
         try:
-            system_message = config["CUSTOM_SYSTEM_MESSAGES"].get(str(user_id), config.get("SYSTEM_MESSAGE"))
-            messages = [{"role": "system", "content": system_message}]
+            system_message = config["CUSTOM_SYSTEM_MESSAGES"].get(str(user_id), config.get("SYSTEM_MESSAGE", ""))
+            if not isinstance(system_message, str):
+               system_message = ""
+            messages = []
+            if system_message:
+               messages.append({"role": "system", "content": system_message})
+               
             if prompt.startswith("USER:"):
-                messages.append({"role": "user", "content": prompt[5:]})
+               messages.append({"role": "user", "content": prompt[5:]})
             else:
-                messages.append({"role": "user", "content": prompt})
+               messages.append({"role": "user", "content": prompt})
 
             response = openai.ChatCompletion.create(
               model=model,
