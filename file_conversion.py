@@ -6,41 +6,46 @@ from datetime import datetime, timedelta
 from config import config
 from pytube import YouTube
 import time
-
+import yt_dlp
 
 def download_youtube_video(youtube_url, output_format):
     try:
-        yt = YouTube(youtube_url)
-        if output_format in ["mp3", "wav"]:
-            stream = yt.streams.filter(only_audio=True).first()
-        elif output_format == "mp4":
-            stream = yt.streams.filter(progressive=True, file_extension="mp4").first()
+        temp_file = f"temp/%(title)s.%(ext)s"
+
+        if output_format in ('mp3', 'wav', 'flac'):
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': temp_file,
+                'postprocessors': [
+                    {
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': output_format,
+                        'preferredquality': '192',
+                    },
+                    {'key': 'FFmpegMetadata'}
+                ],
+            }
+        elif output_format == 'mp4':
+            ydl_opts = {
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'outtmpl': temp_file,
+            }
         else:
             return None
 
-        temp_file = f"temp/{stream.default_filename}"
-        stream.download(output_path="temp")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
 
-        if output_format in ["mp3", "wav"]:
-            converted_file = convert_video_to_audio(temp_file, output_format)
-            os.remove(temp_file)
-            return converted_file  # This line was changed to return the path of the converted audio file
-        else:
-            return temp_file
+        # Find the correct output file by searching for files with the video title
+        for file in os.listdir("temp"):
+            if file.endswith(f".{output_format}"):
+                return os.path.join("temp", file)
 
     except Exception as e:
         print(f"Error downloading YouTube video: {e}")
         return None
 
-def convert_video_to_audio(input_path, output_format):
-    unique_id = int(time.time())
-    output_path = f'temp_{unique_id}.{output_format}'
-    
-    if output_format in ['mp3', 'wav']:
-        stream = ffmpeg.input(input_path).output(output_path, format=output_format, acodec='libmp3lame' if output_format == 'mp3' else None)
-        ffmpeg.run(stream)
 
-    return output_path
 
 def generate_sas_url(blob_service_client, container_name, blob_name):
     container_client = blob_service_client.get_container_client(container_name)
