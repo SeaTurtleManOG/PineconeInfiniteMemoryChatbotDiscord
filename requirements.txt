@@ -4,7 +4,7 @@ nltk
 openai
 pinecone-client
 pytube
-youtube-dl
+yt-dlp
 ffmpeg-python
 azure-storage-blob
 selenium
